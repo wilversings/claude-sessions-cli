@@ -955,6 +955,23 @@ const App = () => {
     return () => clearInterval(id)
   }, [sessions])
 
+  // Repaint cleanly on terminal resize. Ink erases the previous frame by
+  // counting the logical lines it emitted; when the terminal narrows, those
+  // lines reflow onto more physical rows than Ink accounts for, so the stale
+  // header/tab rows survive and pile up with every SIGWINCH. Wiping the screen
+  // and scrollback before forcing a fresh render removes the residue.
+  const [, forceResize] = useState(0)
+  useEffect(() => {
+    const onResize = () => {
+      stdout.write("\x1b[2J\x1b[3J\x1b[H")
+      forceResize((n) => n + 1)
+    }
+    stdout.on("resize", onResize)
+    return () => {
+      stdout.off("resize", onResize)
+    }
+  }, [stdout])
+
   const CHROME_ROWS = 10
   const listHeight = Math.max(1, (stdout.rows ?? 24) - CHROME_ROWS)
 
