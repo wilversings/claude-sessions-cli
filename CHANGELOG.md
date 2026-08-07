@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 ### Highlights
 
 - **Star code sessions** — press `s` on a code session to star it. Starred sessions float to the top of their project group and are marked with a `★`, mirroring the pin behaviour chats already had. Stars are stored per profile alongside chat pins, keyed by session id.
+- **Export sessions and projects** — press `e` on a session to bundle just that session, or on a project header to bundle every session in the project, into a portable `.tar.gz` written to the current directory. Press `E` to export every session across all projects at once. The archive contains a `manifest.json` recording each session's `cwd` plus the raw `.jsonl` files under `sessions/`, so exports can be moved between machines or restored into the right project later.
 
 ### Fixes
 

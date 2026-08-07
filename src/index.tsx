@@ -6,13 +6,16 @@ import { readdir, stat } from "fs/promises"
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
+  copyFileSync,
+  rmSync,
   readdirSync,
   readFileSync,
   writeFileSync,
 } from "fs"
-import { basename, join, dirname } from "path"
+import { basename, join, dirname, resolve } from "path"
 import { spawnSync, execSync } from "child_process"
-import { homedir } from "os"
+import { homedir, tmpdir } from "os"
 import { randomUUID } from "crypto"
 
 const HOME = homedir()
@@ -296,6 +299,92 @@ const saveSessionTag = (dir: string, tag: string) => {
   else delete tags[dir]
   writeFileSync(SESSION_TAGS_FILE, JSON.stringify(tags, null, 2))
 }
+
+// A filesystem-safe timestamp 'YYYYMMDD-HHMMSS' for default export filenames.
+const exportStamp = (): string => {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(
+    d.getHours(),
+  )}${p(d.getMinutes())}${p(d.getSeconds())}`
+}
+
+type ExportEntry = {
+  jsonlPath: string
+  sessionId: string
+  cwd: string
+  title: string
+}
+
+// Bundle sessions into a portable .tar.gz next to the cwd. The archive holds a
+// manifest.json (recording each session's cwd so the sessions can later be
+// restored into the right project) plus the raw .jsonl files under sessions/.
+// Mirrors the format used by claude-session-manager's `export`. Returns the
+// absolute path of the archive written.
+const writeSessionArchive = (
+  entries: ExportEntry[],
+  outName?: string,
+): string => {
+  if (!entries.length) throw new Error("No sessions to export.")
+
+  const hasTar = spawnSync("tar", ["--version"], { stdio: "ignore" })
+  if (hasTar.status !== 0 || hasTar.error)
+    throw new Error("'tar' is required on PATH to write a .tar.gz archive.")
+
+  const outAbs = resolve(outName || `claude-sessions-${exportStamp()}.tar.gz`)
+  const staging = mkdtempSync(join(tmpdir(), "claude-sessions-export-"))
+  try {
+    const manifest = {
+      tool: "claude-sessions-cli",
+      format: 1,
+      exportedAt: new Date().toISOString(),
+      sessions: entries.map((e) => ({
+        sessionId: e.sessionId,
+        file: `sessions/${e.sessionId}.jsonl`,
+        cwd: e.cwd,
+        title: e.title,
+      })),
+    }
+    const sessDir = join(staging, "sessions")
+    mkdirSync(sessDir)
+    for (const e of entries)
+      copyFileSync(e.jsonlPath, join(sessDir, `${e.sessionId}.jsonl`))
+    writeFileSync(
+      join(staging, "manifest.json"),
+      JSON.stringify(manifest, null, 2) + "\n",
+    )
+
+    // Start clean so re-exports to the same name don't accrete.
+    try {
+      rmSync(outAbs)
+    } catch {}
+
+    const r = spawnSync(
+      "tar",
+      ["-czf", outAbs, "-C", staging, "manifest.json", "sessions"],
+      { stdio: "ignore" },
+    )
+    if (r.status !== 0)
+      throw new Error(`Archiving failed (tar exited ${r.status}).`)
+  } finally {
+    rmSync(staging, { recursive: true, force: true })
+  }
+
+  return outAbs
+}
+
+// Collect the export entries for a set of code sessions (those with a jsonl on
+// disk). Chat sessions without a sessionId can't be bundled and are skipped.
+const toExportEntries = (sessions: Session[]): ExportEntry[] =>
+  sessions
+    .filter((s) => s.sessionId && s.claudeProjectDir)
+    .map((s) => ({
+      jsonlPath: join(s.claudeProjectDir, `${s.sessionId}.jsonl`),
+      sessionId: s.sessionId!,
+      cwd: s.dir,
+      title: s.title || s.label,
+    }))
+    .filter((e) => existsSync(e.jsonlPath))
 
 const loadSessions = async (): Promise<Session[]> => {
   const sessions: Session[] = []
@@ -690,6 +779,7 @@ const contextHints = (item: DisplayItem | undefined): [string, string][] => {
       ...nav,
       ["enter", "open"],
       ["space", item.expanded ? "collapse" : "expand"],
+      ["e", "export"],
       ["d", "delete all"],
       ["q", "quit"],
     ]
@@ -711,6 +801,7 @@ const contextHints = (item: DisplayItem | undefined): [string, string][] => {
       pairs.push(["t", "tag"])
     } else if (s.sessionId) {
       pairs.push(["s", s.pinned ? "unstar" : "star"])
+      pairs.push(["e", "export"])
       pairs.push(["r", "rename"])
       pairs.push(["M", "move"])
     }
@@ -903,6 +994,7 @@ const App = () => {
     | "move-dest-input"
     | "move-confirm"
     | "move-done"
+    | "export-done"
   >("list")
   const [newName, setNewName] = useState("")
   const [renameValue, setRenameValue] = useState("")
@@ -936,6 +1028,12 @@ const App = () => {
   } | null>(null)
   const [moveResult, setMoveResult] = useState<{
     ok: boolean
+    error?: string
+  } | null>(null)
+  const [exportResult, setExportResult] = useState<{
+    ok: boolean
+    count: number
+    path?: string
     error?: string
   } | null>(null)
 
@@ -1188,6 +1286,35 @@ const App = () => {
           )
         }
       }
+      if (input === "e" || input === "E") {
+        const item = displayItems[cursor]
+        let toExport: Session[] | null = null
+        if (input === "E")
+          // Export everything: every session with history on disk, any project.
+          toExport = sessions!
+        else if (item?.kind === "session" && item.session.type === "code")
+          toExport = [item.session]
+        else if (item?.kind === "header")
+          toExport = sessions!.filter((s) => s.dir === item.dir)
+        if (toExport) {
+          const entries = toExportEntries(toExport)
+          if (!entries.length) {
+            setExportResult({ ok: true, count: 0 })
+          } else {
+            try {
+              const path = writeSessionArchive(entries)
+              setExportResult({ ok: true, count: entries.length, path })
+            } catch (err) {
+              setExportResult({
+                ok: false,
+                count: 0,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          }
+          setMode("export-done")
+        }
+      }
       if (input === "t") {
         const item = displayItems[cursor]
         if (item?.kind === "session" && item.session.type === "chat") {
@@ -1404,6 +1531,14 @@ const App = () => {
       }
     },
     { isActive: mode === "move-done" },
+  )
+
+  useInput(
+    () => {
+      setExportResult(null)
+      setMode("list")
+    },
+    { isActive: mode === "export-done" },
   )
 
   const isSearching = mode === "search"
@@ -1821,6 +1956,34 @@ const App = () => {
         </Box>
       )
 
+    if (mode === "export-done")
+      return (
+        <Box flexDirection="column" paddingX={2}>
+          {exportResult?.ok && exportResult.count > 0 ? (
+            <>
+              <Text color="green">
+                ✓ exported {exportResult.count} session
+                {exportResult.count === 1 ? "" : "s"}
+              </Text>
+              <Text dimColor>{exportResult.path?.replace(HOME, "~")}</Text>
+            </>
+          ) : exportResult?.ok ? (
+            <>
+              <Text color="yellow">nothing to export</Text>
+              <Text dimColor>no sessions with history on disk</Text>
+            </>
+          ) : (
+            <>
+              <Text color="red">✗ export failed</Text>
+              <Text dimColor>{exportResult?.error ?? "unknown error"}</Text>
+            </>
+          )}
+          <Box marginTop={1}>
+            <Hint pairs={[["any key", "back"]]} />
+          </Box>
+        </Box>
+      )
+
     if (mode === "clean-confirm")
       return (
         <CleanConfirm
@@ -1973,10 +2136,10 @@ const App = () => {
             pairs={[
               ...contextHints(displayItems[cursor]),
               ...(tab === "code"
-                ? ([["n", codeFilter === "named" ? "all" : "named"]] as [
-                    string,
-                    string,
-                  ][])
+                ? ([
+                    ["n", codeFilter === "named" ? "all" : "named"],
+                    ["E", "export all"],
+                  ] as [string, string][])
                 : []),
             ]}
           />
