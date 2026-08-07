@@ -398,6 +398,10 @@ const loadSessions = async (): Promise<Session[]> => {
     if (s.type === "chat") {
       s.pinned = pins.has(s.dir)
       s.tag = tagOverrides[s.dir]
+    } else if (s.sessionId) {
+      // Code sessions are starred by sessionId (chats are keyed by dir); both
+      // live in the same pins file — path keys and uuid keys never collide.
+      s.pinned = pins.has(s.sessionId)
     }
   }
 
@@ -653,14 +657,19 @@ const buildDisplayItems = (
   }
   const items: DisplayItem[] = []
   for (const [dir, group] of groups) {
+    // `recent` stays the most-recent session (groups arrive mtime-first) so
+    // opening a collapsed header still resumes the latest work. Starred
+    // sessions then float to the top of the expanded list.
+    const recent = group[0]!
+    group.sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)))
     const expanded = expandedProjects.has(dir)
     items.push({
       kind: "header",
-      label: group[0].projectLabel ?? group[0].path,
+      label: recent.projectLabel ?? recent.path,
       dir,
       expanded,
       count: group.length,
-      recentSession: group[0]!,
+      recentSession: recent,
     })
     if (expanded) {
       for (const s of group) items.push({ kind: "session", session: s })
@@ -701,6 +710,7 @@ const contextHints = (item: DisplayItem | undefined): [string, string][] => {
       pairs.push(["p", s.pinned ? "unpin" : "pin"])
       pairs.push(["t", "tag"])
     } else if (s.sessionId) {
+      pairs.push(["s", s.pinned ? "unstar" : "star"])
       pairs.push(["r", "rename"])
       pairs.push(["M", "move"])
     }
@@ -1155,6 +1165,24 @@ const App = () => {
             prev
               ? prev.map((s) =>
                   s.dir === item.session.dir ? { ...s, pinned: !s.pinned } : s,
+                )
+              : prev,
+          )
+        }
+      }
+      if (input === "s") {
+        const item = displayItems[cursor]
+        if (
+          item?.kind === "session" &&
+          item.session.type === "code" &&
+          item.session.sessionId
+        ) {
+          const id = item.session.sessionId
+          toggleSessionPin(id)
+          setSessions((prev) =>
+            prev
+              ? prev.map((s) =>
+                  s.sessionId === id ? { ...s, pinned: !s.pinned } : s,
                 )
               : prev,
           )
@@ -1895,7 +1923,12 @@ const App = () => {
                   <Text color={sel ? SEL_COLOR : "magenta"}>{ICON_CHAT}</Text>
                 </>
               ) : (
-                <Text color={sel ? "green" : "gray"}>{sel ? "›" : "·"}</Text>
+                <Text
+                  color={sel ? "green" : s.pinned ? "yellow" : "gray"}
+                  bold={s.pinned}
+                >
+                  {sel ? "›" : s.pinned ? "★" : "·"}
+                </Text>
               )}
               <Box flexGrow={1} flexShrink={1} minWidth={0}>
                 {s.type === "code" && s.title && s.prompt ? (
@@ -1917,7 +1950,7 @@ const App = () => {
               </Box>
               {s.pinned && (
                 <Box flexShrink={0} marginRight={1}>
-                  <Text color={sel ? "yellow" : "gray"} dimColor={!sel}>
+                  <Text color="yellow" bold>
                     ★
                   </Text>
                 </Box>

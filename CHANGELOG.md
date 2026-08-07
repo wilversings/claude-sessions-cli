@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 ## Unreleased — 2026-08-07
 
+### Highlights
+
+- **Star code sessions** — press `s` on a code session to star it. Starred sessions float to the top of their project group and are marked with a `★`, mirroring the pin behaviour chats already had. Stars are stored per profile alongside chat pins, keyed by session id.
+
 ### Fixes
 
 - Fixed the title and header block duplicating (stacking up multiple copies) when the terminal was made narrower. The header is now cleared and repainted once per resize instead of being drawn on top of stale, reflowed rows.

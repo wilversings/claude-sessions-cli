@@ -18,6 +18,7 @@
 - **Named filter** — press `n` on the Code tab to show only named sessions.
 - **Instant resume** — press `enter` on any session and Claude Code opens right where you left off, using `--resume`, `--continue`, or `--name` automatically.
 - **Pin and tag chat sessions** — star important chats to the top, group others into collapsible `#tag` folders.
+- **Star code sessions** — press `s` on any code session to star it; starred sessions float to the top of their project group.
 - **Auto CLAUDE.md creation** — new chat sessions get a `CLAUDE.md` bootstrapped automatically; preview any session's file in-place with `m`.
 - **Clean mode** — run `claude-sessions clean` for interactive cleanup of ghost entries, history-less projects, and orphaned history folders.
 - **Live search** — filter sessions by name or path as you type with `/`.
