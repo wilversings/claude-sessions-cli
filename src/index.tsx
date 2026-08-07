@@ -12,6 +12,7 @@ import {
   readdirSync,
   readFileSync,
   writeFileSync,
+  statSync,
 } from "fs"
 import { basename, join, dirname, resolve } from "path"
 import { spawnSync, execSync } from "child_process"
@@ -385,6 +386,94 @@ const toExportEntries = (sessions: Session[]): ExportEntry[] =>
       title: s.title || s.label,
     }))
     .filter((e) => existsSync(e.jsonlPath))
+
+// Ensure a project cwd is registered in ~/.claude.json so imported sessions
+// surface in the list (loadSessions only walks projects listed there). Creates
+// the file if this profile has none yet.
+const addToClaudeJson = (dir: string) => {
+  try {
+    let json: { projects?: Record<string, unknown> } = {}
+    if (existsSync(CLAUDE_JSON)) {
+      try {
+        json = JSON.parse(readFileSync(CLAUDE_JSON, "utf8"))
+      } catch {}
+    }
+    if (!json.projects) json.projects = {}
+    if (!json.projects[dir]) {
+      json.projects[dir] = {}
+      writeFileSync(CLAUDE_JSON, JSON.stringify(json, null, 2))
+    }
+  } catch {}
+}
+
+type ImportEntry = {
+  sessionId: string
+  cwd: string
+  src: string // extracted .jsonl inside the staging dir
+  target: string // where it lands under CLAUDE_PROJECTS
+}
+
+// Extract an archive produced by the export feature into a temp staging dir and
+// resolve every session it lists to a target path. The caller owns the returned
+// staging dir and must remove it when done. Throws on any structural problem.
+const extractArchive = (
+  archivePath: string,
+): { entries: ImportEntry[]; staging: string } => {
+  const abs = resolve(archivePath)
+  if (!existsSync(abs)) throw new Error(`Archive not found: ${archivePath}`)
+
+  const hasTar = spawnSync("tar", ["--version"], { stdio: "ignore" })
+  if (hasTar.status !== 0 || hasTar.error)
+    throw new Error("'tar' is required on PATH to read a .tar.gz archive.")
+
+  const staging = mkdtempSync(join(tmpdir(), "claude-sessions-import-"))
+  try {
+    const r = spawnSync("tar", ["-xzf", abs, "-C", staging], { stdio: "ignore" })
+    if (r.status !== 0)
+      throw new Error(`Extraction failed (tar exited ${r.status}).`)
+
+    let manifest: { sessions?: unknown }
+    try {
+      manifest = JSON.parse(readFileSync(join(staging, "manifest.json"), "utf8"))
+    } catch {
+      throw new Error(
+        "Archive has no valid manifest.json — not a claude-sessions export.",
+      )
+    }
+
+    const raw = Array.isArray(manifest.sessions)
+      ? (manifest.sessions as Array<Record<string, string>>)
+      : []
+    const entries: ImportEntry[] = []
+    for (const e of raw) {
+      if (!e.sessionId || !e.cwd) continue
+      const src = join(staging, e.file || `sessions/${e.sessionId}.jsonl`)
+      if (!existsSync(src)) continue
+      entries.push({
+        sessionId: e.sessionId,
+        cwd: e.cwd,
+        src,
+        target: join(
+          CLAUDE_PROJECTS,
+          toProjectDirName(e.cwd),
+          `${e.sessionId}.jsonl`,
+        ),
+      })
+    }
+    if (!entries.length) throw new Error("Archive lists no importable sessions.")
+    return { entries, staging }
+  } catch (err) {
+    rmSync(staging, { recursive: true, force: true })
+    throw err
+  }
+}
+
+// Copy one imported session into place and register its project.
+const applyImportEntry = (e: ImportEntry) => {
+  mkdirSync(dirname(e.target), { recursive: true })
+  copyFileSync(e.src, e.target)
+  addToClaudeJson(e.cwd)
+}
 
 const loadSessions = async (): Promise<Session[]> => {
   const sessions: Session[] = []
@@ -995,6 +1084,9 @@ const App = () => {
     | "move-confirm"
     | "move-done"
     | "export-done"
+    | "import-input"
+    | "import-conflict"
+    | "import-done"
   >("list")
   const [newName, setNewName] = useState("")
   const [renameValue, setRenameValue] = useState("")
@@ -1036,6 +1128,17 @@ const App = () => {
     path?: string
     error?: string
   } | null>(null)
+  const [importPath, setImportPath] = useState("")
+  const [importJob, setImportJob] = useState<{
+    entries: ImportEntry[]
+    index: number
+    policy: "ask" | "all" | "none"
+    imported: number
+    overwritten: number
+    skipped: number
+    staging: string
+  } | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
 
   const LOADING_MESSAGES = [
     "Summoning your sessions…",
@@ -1174,6 +1277,63 @@ const App = () => {
       sessionId: !isChat ? session.sessionId : undefined,
     }
     exit()
+  }
+
+  // Walk the import queue, applying non-conflicting sessions (and conflicting
+  // ones the policy already covers) until it either runs out or hits a conflict
+  // that needs the user's call, at which point it parks in "import-conflict".
+  type ImportJob = NonNullable<typeof importJob>
+  const advanceImport = (job: ImportJob) => {
+    let { index, imported, overwritten, skipped } = job
+    const { entries, policy, staging } = job
+    while (index < entries.length) {
+      const e = entries[index]!
+      if (!existsSync(e.target)) {
+        applyImportEntry(e)
+        imported++
+        index++
+        continue
+      }
+      if (policy === "all") {
+        applyImportEntry(e)
+        overwritten++
+        index++
+        continue
+      }
+      if (policy === "none") {
+        skipped++
+        index++
+        continue
+      }
+      // policy === "ask": stop and let the user decide on this one.
+      setImportJob({ ...job, index, imported, overwritten, skipped })
+      setMode("import-conflict")
+      return
+    }
+    rmSync(staging, { recursive: true, force: true })
+    setImportJob({ ...job, index, imported, overwritten, skipped })
+    setImportError(null)
+    setMode("import-done")
+    loadSessions().then(setSessions)
+  }
+
+  const startImport = (pathStr: string) => {
+    try {
+      const { entries, staging } = extractArchive(pathStr.trim())
+      advanceImport({
+        entries,
+        index: 0,
+        policy: "ask",
+        imported: 0,
+        overwritten: 0,
+        skipped: 0,
+        staging,
+      })
+    } catch (err) {
+      setImportJob(null)
+      setImportError(err instanceof Error ? err.message : String(err))
+      setMode("import-done")
+    }
   }
 
   useEffect(() => {
@@ -1315,6 +1475,21 @@ const App = () => {
           setMode("export-done")
         }
       }
+      if (input === "i") {
+        // Prefill with the newest export archive in the cwd, if any.
+        let def = ""
+        try {
+          const cwd = process.cwd()
+          const newest = readdirSync(cwd)
+            .filter((f) => /^claude-sessions-.*\.tar\.gz$/.test(f))
+            .map((f) => ({ f, m: statSync(join(cwd, f)).mtimeMs }))
+            .sort((a, b) => b.m - a.m)[0]
+          if (newest) def = join(cwd, newest.f)
+        } catch {}
+        setImportPath(def)
+        setImportError(null)
+        setMode("import-input")
+      }
       if (input === "t") {
         const item = displayItems[cursor]
         if (item?.kind === "session" && item.session.type === "chat") {
@@ -1427,7 +1602,13 @@ const App = () => {
     (_, key) => {
       if (key.escape) setMode("list")
     },
-    { isActive: mode === "new" || mode === "rename" || mode === "tag" },
+    {
+      isActive:
+        mode === "new" ||
+        mode === "rename" ||
+        mode === "tag" ||
+        mode === "import-input",
+    },
   )
 
   useInput(
@@ -1541,6 +1722,51 @@ const App = () => {
     { isActive: mode === "export-done" },
   )
 
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        setMode("import-input")
+        return
+      }
+      const job = importJob
+      if (!job) return
+      const e = job.entries[job.index]!
+      const next = job.index + 1
+      // o: overwrite this one · n: skip this one · a: overwrite all · x: skip all
+      if (input === "o") {
+        applyImportEntry(e)
+        advanceImport({ ...job, index: next, overwritten: job.overwritten + 1 })
+      } else if (input === "n") {
+        advanceImport({ ...job, index: next, skipped: job.skipped + 1 })
+      } else if (input === "a") {
+        applyImportEntry(e)
+        advanceImport({
+          ...job,
+          index: next,
+          overwritten: job.overwritten + 1,
+          policy: "all",
+        })
+      } else if (input === "x") {
+        advanceImport({
+          ...job,
+          index: next,
+          skipped: job.skipped + 1,
+          policy: "none",
+        })
+      }
+    },
+    { isActive: mode === "import-conflict" },
+  )
+
+  useInput(
+    () => {
+      setImportJob(null)
+      setImportError(null)
+      setMode("list")
+    },
+    { isActive: mode === "import-done" },
+  )
+
   const isSearching = mode === "search"
   const visibleItems =
     mode === "list" || mode === "search"
@@ -1580,6 +1806,34 @@ const App = () => {
           </Box>
           <Box marginTop={1}>
             <Hint pairs={[["esc", "cancel"]]} />
+          </Box>
+        </Box>
+      )
+
+    if (mode === "import-input")
+      return (
+        <Box flexDirection="column" paddingX={2}>
+          <Text bold>Import sessions</Text>
+          <Text dimColor>path to a .tar.gz exported by this tool</Text>
+          <Box marginTop={1} gap={1}>
+            <Text color="cyan">›</Text>
+            <TextInput
+              value={importPath}
+              onChange={setImportPath}
+              onSubmit={(val) => {
+                if (!val.trim()) {
+                  setMode("list")
+                  return
+                }
+                startImport(val)
+              }}
+            />
+          </Box>
+          <Box marginTop={1}>
+            <Hint pairs={[
+              ["enter", "import"],
+              ["esc", "cancel"],
+            ]} />
           </Box>
         </Box>
       )
@@ -1984,6 +2238,62 @@ const App = () => {
         </Box>
       )
 
+    if (mode === "import-conflict" && importJob) {
+      const e = importJob.entries[importJob.index]!
+      return (
+        <Box flexDirection="column" paddingX={2}>
+          <Text bold color="yellow">
+            Conflict ({importJob.index + 1}/{importJob.entries.length})
+          </Text>
+          <Text dimColor>a session already exists at this location:</Text>
+          <Box marginTop={1} flexDirection="column">
+            <Text>
+              <Text dimColor>project </Text>
+              {e.cwd.replace(HOME, "~")}
+            </Text>
+            <Text>
+              <Text dimColor>session </Text>
+              {e.sessionId}
+            </Text>
+          </Box>
+          <Box marginTop={1}>
+            <Hint
+              pairs={[
+                ["o", "overwrite"],
+                ["n", "keep existing"],
+                ["a", "overwrite all"],
+                ["x", "overwrite none"],
+                ["esc", "cancel"],
+              ]}
+            />
+          </Box>
+        </Box>
+      )
+    }
+
+    if (mode === "import-done")
+      return (
+        <Box flexDirection="column" paddingX={2}>
+          {importError ? (
+            <>
+              <Text color="red">✗ import failed</Text>
+              <Text dimColor>{importError}</Text>
+            </>
+          ) : (
+            <>
+              <Text color="green">✓ import complete</Text>
+              <Text dimColor>
+                {importJob?.imported ?? 0} added · {importJob?.overwritten ?? 0}{" "}
+                overwritten · {importJob?.skipped ?? 0} kept
+              </Text>
+            </>
+          )}
+          <Box marginTop={1}>
+            <Hint pairs={[["any key", "back"]]} />
+          </Box>
+        </Box>
+      )
+
     if (mode === "clean-confirm")
       return (
         <CleanConfirm
@@ -2139,6 +2449,7 @@ const App = () => {
                 ? ([
                     ["n", codeFilter === "named" ? "all" : "named"],
                     ["E", "export all"],
+                    ["i", "import"],
                   ] as [string, string][])
                 : []),
             ]}

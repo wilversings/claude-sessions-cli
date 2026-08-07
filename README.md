@@ -20,6 +20,7 @@
 - **Pin and tag chat sessions** — star important chats to the top, group others into collapsible `#tag` folders.
 - **Star code sessions** — press `s` on any code session to star it; starred sessions float to the top of their project group.
 - **Export sessions** — press `e` on a session to bundle it, or on a project header to bundle the whole project, into a portable `.tar.gz` (with a manifest recording each session's project) in the current directory. Press `E` to export **every** session across all projects at once.
+- **Import sessions** — press `i` to restore sessions from an exported `.tar.gz` back into their original projects. When a session already exists you're asked what to do — overwrite it, keep the existing one, or apply overwrite-all / overwrite-none to the rest.
 - **Auto CLAUDE.md creation** — new chat sessions get a `CLAUDE.md` bootstrapped automatically; preview any session's file in-place with `m`.
 - **Clean mode** — run `claude-sessions clean` for interactive cleanup of ghost entries, history-less projects, and orphaned history folders.
 - **Live search** — filter sessions by name or path as you type with `/`.

@@ -10,6 +10,7 @@ All notable changes to this project are documented here.
 
 - **Star code sessions** — press `s` on a code session to star it. Starred sessions float to the top of their project group and are marked with a `★`, mirroring the pin behaviour chats already had. Stars are stored per profile alongside chat pins, keyed by session id.
 - **Export sessions and projects** — press `e` on a session to bundle just that session, or on a project header to bundle every session in the project, into a portable `.tar.gz` written to the current directory. Press `E` to export every session across all projects at once. The archive contains a `manifest.json` recording each session's `cwd` plus the raw `.jsonl` files under `sessions/`, so exports can be moved between machines or restored into the right project later.
+- **Import sessions** — press `i` to restore sessions from an exported `.tar.gz`. Each session is placed back into the project recorded in the manifest, and the project is registered in `~/.claude.json` so it shows up immediately. When a session id already exists locally the import pauses and asks per conflict, with the choice to overwrite it, keep the existing one, or switch to overwrite-all / overwrite-none for the remaining conflicts.
 
 ### Fixes
 
