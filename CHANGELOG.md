@@ -14,6 +14,7 @@ All notable changes to this project are documented here.
 
 ### Fixes
 
+- Fixed deleting a session doing nothing on machines without the `trash` command installed. The session vanished from the list but its `.jsonl` was never touched, so it came back the next time the tool was launched. Deletion now falls back to a permanent remove when no `trash`, `trash-put`, or `gio trash` is available, and the list only drops a session once it is actually gone from disk — a failure is reported in the UI instead of being swallowed. The same fallback applies to clean mode, moving a session between projects, and discarding an empty new chat.
 - Fixed the title and header block duplicating (stacking up multiple copies) when the terminal was made narrower. The header is now cleared and repainted once per resize instead of being drawn on top of stale, reflowed rows.
 
 ---

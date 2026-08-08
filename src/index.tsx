@@ -610,7 +610,7 @@ const findCleanItems = async (): Promise<CleanItem[]> => {
         reason: "ghost (directory deleted)",
         execute: () => {
           removeFromClaudeJson(cwd)
-          if (existsSync(projectDir)) execSync(`trash "${projectDir}"`)
+          moveToTrash(projectDir)
         },
       })
       continue
@@ -635,7 +635,7 @@ const findCleanItems = async (): Promise<CleanItem[]> => {
           reason: "no history",
           execute: () => {
             removeFromClaudeJson(cwd)
-            execSync(`trash "${projectDir}"`)
+            moveToTrash(projectDir)
           },
         })
     } catch {}
@@ -650,7 +650,9 @@ const findCleanItems = async (): Promise<CleanItem[]> => {
           items.push({
             label: fullPath.replace(HOME, "~"),
             reason: "orphaned history",
-            execute: () => execSync(`trash "${fullPath}"`),
+            execute: () => {
+              moveToTrash(fullPath)
+            },
           })
         }
       }
@@ -660,21 +662,55 @@ const findCleanItems = async (): Promise<CleanItem[]> => {
   return items
 }
 
-const deleteSession = (session: Session) => {
+// `trash` is a separate package that plenty of machines don't have, and a
+// missing binary just exits 127 — which used to be swallowed, leaving the
+// session on disk while the TUI acted as if it were gone. Probe once for
+// whichever recoverable-delete CLI exists, and fall back to a real remove so a
+// delete is always a delete.
+const TRASH_CMD = (() => {
+  for (const [bin, cmd] of [
+    ["trash", "trash"],
+    ["trash-put", "trash-put"],
+    ["gio", "gio trash"],
+  ] as const) {
+    try {
+      execSync(`command -v ${bin}`, { stdio: "ignore" })
+      return cmd
+    } catch {}
+  }
+  return null
+})()
+
+const moveToTrash = (path: string): boolean => {
+  if (!existsSync(path)) return true
+  if (TRASH_CMD) {
+    try {
+      execSync(`${TRASH_CMD} "${path}"`, { stdio: "ignore" })
+      if (!existsSync(path)) return true
+    } catch {}
+  }
+  try {
+    rmSync(path, { recursive: true, force: true })
+    return !existsSync(path)
+  } catch {
+    return false
+  }
+}
+
+const deleteSession = (session: Session): boolean => {
   if (session.sessionId) {
     const jsonlPath = join(
       session.claudeProjectDir,
       `${session.sessionId}.jsonl`,
     )
-    try {
-      execSync(`trash "${jsonlPath}"`)
-    } catch {}
-  } else if (session.type === "chat") {
-    try {
-      execSync(`trash "${session.dir}"`)
-      removeSessionLabel(session.dir)
-    } catch {}
+    return moveToTrash(jsonlPath)
   }
+  if (session.type === "chat") {
+    if (!moveToTrash(session.dir)) return false
+    removeSessionLabel(session.dir)
+    return true
+  }
+  return false
 }
 
 const ensureClaudeJsonProject = (dir: string) => {
@@ -753,7 +789,12 @@ const moveSession = (
     mkdirSync(toDir, { recursive: true })
     mkdirSync(toProjectDir, { recursive: true })
     writeFileSync(destPath, rewritten)
-    execSync(`trash "${srcPath}"`)
+    if (!moveToTrash(srcPath)) {
+      // Leaving both copies would make the session show up twice, so undo the
+      // half we did manage to write.
+      rmSync(destPath, { force: true })
+      return { ok: false, error: "could not remove the original session file" }
+    }
 
     ensureClaudeJsonProject(toDir)
 
@@ -762,11 +803,7 @@ const moveSession = (
       : []
     if (!remaining.length) {
       removeFromClaudeJson(fromDir)
-      if (existsSync(fromProjectDir)) {
-        try {
-          execSync(`trash "${fromProjectDir}"`)
-        } catch {}
-      }
+      moveToTrash(fromProjectDir)
     }
 
     return { ok: true }
@@ -1139,6 +1176,7 @@ const App = () => {
     staging: string
   } | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const LOADING_MESSAGES = [
     "Summoning your sessions…",
@@ -1555,17 +1593,23 @@ const App = () => {
       if (input === "y") {
         const item = displayItems[cursor]
         if (item?.kind === "session") {
-          deleteSession(item.session)
-          setSessions((s) =>
-            s!.filter(
-              (x) =>
-                !(
-                  x.dir === item.session.dir &&
-                  x.sessionId === item.session.sessionId
-                ),
-            ),
-          )
-          setCursor((c) => Math.max(0, c - 1))
+          // Only drop the row once the file is actually gone, otherwise the
+          // session reappears on the next launch and the list was lying.
+          if (deleteSession(item.session)) {
+            setDeleteError(null)
+            setSessions((s) =>
+              s!.filter(
+                (x) =>
+                  !(
+                    x.dir === item.session.dir &&
+                    x.sessionId === item.session.sessionId
+                  ),
+              ),
+            )
+            setCursor((c) => Math.max(0, c - 1))
+          } else {
+            setDeleteError(`could not delete ${item.session.label}`)
+          }
         }
         setMode("list")
       }
@@ -1578,14 +1622,26 @@ const App = () => {
     (input, key) => {
       if (input === "y" && deleteAllTarget) {
         const claudeProjectDir = deleteAllTarget.sessions[0]?.claudeProjectDir
-        for (const s of deleteAllTarget.sessions) deleteSession(s)
-        if (claudeProjectDir && existsSync(claudeProjectDir))
-          try {
-            execSync(`trash "${claudeProjectDir}"`)
-          } catch {}
-        removeFromClaudeJson(deleteAllTarget.dir)
-        removeSessionLabel(deleteAllTarget.dir)
-        setSessions((s) => s!.filter((x) => x.dir !== deleteAllTarget.dir))
+        const failed = deleteAllTarget.sessions.filter((s) => !deleteSession(s))
+        if (claudeProjectDir && !failed.length) moveToTrash(claudeProjectDir)
+        if (failed.length) {
+          setDeleteError(
+            `could not delete ${failed.length} of ${deleteAllTarget.sessions.length} sessions in ${deleteAllTarget.label}`,
+          )
+          // Drop only the ones that really went away; the rest stay visible.
+          setSessions((s) =>
+            s!.filter(
+              (x) =>
+                x.dir !== deleteAllTarget.dir ||
+                failed.some((f) => f.sessionId === x.sessionId),
+            ),
+          )
+        } else {
+          setDeleteError(null)
+          removeFromClaudeJson(deleteAllTarget.dir)
+          removeSessionLabel(deleteAllTarget.dir)
+          setSessions((s) => s!.filter((x) => x.dir !== deleteAllTarget.dir))
+        }
         setCursor((c) => Math.max(0, c - 1))
         setDeleteAllTarget(null)
         setMode("list")
@@ -2441,6 +2497,12 @@ const App = () => {
             </Box>
           )
         })}
+        {deleteError && (
+          <Box marginTop={1} paddingX={2} gap={1}>
+            <Text color="red">✗</Text>
+            <Text color="red">{deleteError}</Text>
+          </Box>
+        )}
         <Box marginTop={1} paddingX={2}>
           <Hint
             pairs={[
@@ -2731,9 +2793,7 @@ if (process.argv[2] === "clean") {
           .filter((f) => f.endsWith(".jsonl"))
           .some((f) => readFirstPrompt(join(claudeProjectDir, f)) !== "")
       if (!hasConversation) {
-        try {
-          execSync(`trash "${dir}"`)
-        } catch {}
+        moveToTrash(dir)
         removeSessionLabel(dir)
       }
     }
