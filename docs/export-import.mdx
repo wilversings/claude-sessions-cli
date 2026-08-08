@@ -1,0 +1,48 @@
+---
+title: 📦 Export & Import
+description: Bundle sessions into a portable .tar.gz and restore them on another machine.
+---
+
+Sessions can be bundled into a portable `.tar.gz` archive and restored later,
+which makes it easy to move history between machines or back it up. Requires
+`tar` on `PATH`.
+
+## ⬆️ Exporting
+
+| Key | Context        | Result                                            |
+| --- | -------------- | -------------------------------------------------- |
+| `e` | Code session   | Bundle just that session                          |
+| `e` | Project header | Bundle every session in that project              |
+| `E` | Anywhere       | Bundle every session across all projects           |
+
+Archives are written to the current directory as
+`claude-sessions-<stamp>.tar.gz`. Each archive holds a `manifest.json`
+recording every session's `cwd` alongside the raw `.jsonl` files under
+`sessions/`, so an export is self-contained and can be restored into the
+right project on any machine.
+
+## ⬇️ Importing
+
+Press `i` to restore sessions from an exported archive. The path prompt
+prefills with the newest `claude-sessions-*.tar.gz` found in the current
+directory, or you can type another path.
+
+Each session is extracted, copied back into the project directory recorded
+in the manifest, and that project is registered in `~/.claude.json` so it
+shows up immediately — the list refreshes as soon as the import finishes.
+
+### Conflicts
+
+If a session id already exists locally, the import pauses on that session
+and asks what to do:
+
+| Choice | Action                                          |
+| ------ | ------------------------------------------------ |
+| `o`    | Overwrite this session                          |
+| `n`    | Keep the existing session, skip this one        |
+| `a`    | Overwrite this and all remaining conflicts      |
+| `x`    | Keep existing for this and all remaining conflicts |
+| `esc`  | Cancel the import and return to the path prompt |
+
+The temporary staging directory used during import is always cleaned up,
+whether the import succeeds, fails, or is cancelled.

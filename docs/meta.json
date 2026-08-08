@@ -4,6 +4,7 @@
     "index",
     "interface",
     "pinning-and-tagging",
+    "export-import",
     "clean-mode",
     "cli-reference"
   ]

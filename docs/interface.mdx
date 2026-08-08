@@ -43,6 +43,11 @@ You never have to remember which flag a session needs.
 | `d`         | Session         | Delete session (with confirmation)         |
 | `d`         | Project header  | Delete all sessions for that project       |
 | `r`         | Code session    | Rename the session label                   |
+| `s`         | Code session    | Star or unstar (★) the session             |
+| `e`         | Code session    | Export the session to a `.tar.gz`          |
+| `e`         | Project header  | Export every session in that project       |
+| `E`         | Anywhere        | Export every session across all projects   |
+| `i`         | Anywhere        | Import sessions from an exported `.tar.gz` |
 | `p`         | Chat session    | Pin or unpin (★) the session               |
 | `t`         | Chat session    | Set or remove a `#tag` for the session     |
 | `m`         | Chat session    | Preview the session's `CLAUDE.md` inline   |
@@ -55,3 +60,13 @@ You never have to remember which flag a session needs.
 
 Press `/` to enter search mode and filter the visible sessions by name or path
 as you type. Press `esc` to clear the filter and return to the full list.
+
+## ⭐ Starring code sessions
+
+Press `s` on a Code session to star it. Like pinned Chat sessions, starred
+Code sessions float to the top of their project group and are marked with a
+`★`. Stars are stored alongside Chat pins, keyed by session id so the two
+never collide.
+
+Continue to [Export & Import](/projects/claude-sessions-cli/docs/export-import)
+for how to move sessions between machines.

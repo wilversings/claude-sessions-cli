@@ -22,6 +22,13 @@ it ships as a single `claude-sessions` binary.
 - **Named filter** — press `n` on the Code tab to show only named sessions.
 - **Pin & tag chat sessions** — star important chats to the top, group others
   into collapsible `#tag` folders.
+- **Star code sessions** — press `s` on any code session to star it; starred
+  sessions float to the top of their project group.
+- **Export sessions** — press `e` on a session to bundle it, or on a project
+  header to bundle the whole project, into a portable `.tar.gz`. Press `E` to
+  export every session across all projects at once.
+- **Import sessions** — press `i` to restore sessions from an exported
+  `.tar.gz` back into their original projects.
 - **Instant resume** — press `enter` on any session and Claude Code opens right
   where you left off, using the correct `--resume`, `--continue`, or `--name`
   flag automatically.
@@ -34,7 +41,7 @@ it ships as a single `claude-sessions` binary.
 ## 📦 Install
 
 ```sh
-npm install -g @kud/claude-sessions-cli
+npm install -g @wilversings/claude-sessions-cli
 ```
 
 ## 🚀 Quick Start
