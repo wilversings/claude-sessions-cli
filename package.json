@@ -1,12 +1,13 @@
 {
-  "name": "@kud/claude-sessions-cli",
+  "name": "@wilversings/claude-sessions-cli",
   "version": "2.5.0",
-  "description": "TUI session manager for Claude Code",
-  "homepage": "https://kud.io/projects/claude-sessions-cli",
+  "description": "TUI session manager for Claude Code (fork of @kud/claude-sessions-cli)",
+  "homepage": "https://github.com/wilversings/claude-sessions-cli",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kud/claude-sessions-cli.git"
+    "url": "https://github.com/wilversings/claude-sessions-cli.git"
   },
+  "author": "Marius Aiordăchioaei",
   "license": "MIT",
   "type": "module",
   "bin": {

@@ -2,12 +2,12 @@
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![npm](https://img.shields.io/npm/v/%40kud%2Fclaude-sessions-cli?style=flat-square&color=CB3837)](https://www.npmjs.com/package/@kud/claude-sessions-cli)
+[![npm](https://img.shields.io/npm/v/%40wilversings%2Fclaude-sessions-cli?style=flat-square&color=CB3837)](https://www.npmjs.com/package/@wilversings/claude-sessions-cli)
 [![MIT](https://img.shields.io/badge/licence-MIT-22C55E?style=flat-square)](LICENSE)
 
 **TUI session manager for Claude Code**
 
-<a href="https://kud.io/projects/claude-sessions-cli">Website</a> · <a href="https://kud.io/projects/claude-sessions-cli/docs">Documentation</a>
+Fork of <a href="https://github.com/kud/claude-sessions-cli">kud/claude-sessions-cli</a> with additional features (export/import, starring, and more).
 
 </div>
 
@@ -33,7 +33,7 @@
 ## Install
 
 ```sh
-npm install -g @kud/claude-sessions-cli
+npm install -g @wilversings/claude-sessions-cli
 ```
 
 ## Usage
@@ -47,10 +47,12 @@ $ claude-sessions --no-banner
 ## Development
 
 ```sh
-git clone https://github.com/kud/claude-sessions-cli.git
+git clone https://github.com/wilversings/claude-sessions-cli.git
 cd claude-sessions-cli
 npm install
 npm run dev
 ```
 
-📚 **Full documentation → [claude-sessions-cli/docs](https://kud.io/projects/claude-sessions-cli/docs)**
+## Credit
+
+This is a fork of [kud/claude-sessions-cli](https://github.com/kud/claude-sessions-cli) by Erwann Mest, licensed under MIT. See [LICENSE](LICENSE) for the full license text.
