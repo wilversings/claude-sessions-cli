@@ -8,6 +8,14 @@ All notable changes to this project are documented here.
 
 ### Highlights
 
+- **Startup is roughly twice as fast, and more on a large history** — time from launch to a usable list drops from ~1.6s to ~0.85s on a typical install (60 sessions, 35 MB of transcripts), and from ~3.1s to ~1.2s on a large one (320 sessions, ~500 MB). With `--no-banner` it is ~0.33s and ~0.69s respectively, down from ~0.64s and ~2.2s. Three things were costing that time:
+
+  - Every transcript was read from disk **twice** and JSON-parsed line by line: once to find the opening prompt, once to find the title. Both facts now come from a single read that decodes only the slices it needs — a bounded prefix for the prompt, and a byte search backwards from the end for the title, which for the majority of transcripts that were never renamed costs no parsing at all.
+  - Transcript reads were **synchronous**, which blocked the event loop and left the startup animation frozen rather than playing while the list loaded. They are now async and windowed, which also keeps peak memory flat instead of holding every transcript at once.
+  - React and Ink are now **bundled into the published file** and built against React's production build, removing a few hundred milliseconds of module resolution from every launch.
+
+- **The startup animation adapts to how long loading takes** — the intro and the closing beat always play, but the pulse in the middle now loops only while sessions are still loading and is skipped entirely when they are already there, instead of always burning a flat second. It also hands off to the list's own spinner rather than stranding you on the splash if a load runs long. `--no-banner` still skips it altogether.
+
 - **Integration test suite** — the tool is now covered end to end by tests that drive the built CLI exactly as a user does: a real pseudo-terminal, real keystrokes, and a VT emulator interpreting the output, asserted against the rendered screen and the files written to disk. Every session lives in a throwaway `HOME` with a stub `claude` on `PATH`, so tests never touch a real install. Run them with `npm test`; they run on every push and again on the release tag before anything is published.
 
 - **Node 22 is now supported** — the minimum supported version drops from 24 to 22. Nothing in the tool or its dependency tree needed anything newer (`ink` itself declares `>=22`), and CI now runs the full integration suite on both 22 and 24 so the floor is actually exercised rather than assumed.
