@@ -1,8 +1,11 @@
 name: Test
 
 on:
+  # Pull requests cover branch work. Limiting push to the default branch keeps a
+  # branch with an open PR from running the whole suite twice on the same commit,
+  # while still checking main after a merge.
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_call:
 
