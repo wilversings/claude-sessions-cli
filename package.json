@@ -1,6 +1,6 @@
 {
   "name": "@wilversings/claude-sessions-cli",
-  "version": "2.5.0",
+  "version": "1.0.0",
   "description": "TUI session manager for Claude Code (fork of @kud/claude-sessions-cli)",
   "homepage": "https://github.com/wilversings/claude-sessions-cli",
   "repository": {
