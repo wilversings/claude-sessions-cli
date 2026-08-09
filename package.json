@@ -25,7 +25,9 @@
     "build": "tsup",
     "build:watch": "tsup --watch",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -37,11 +39,14 @@
   "devDependencies": {
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
+    "@xterm/headless": "^6.0.0",
+    "node-pty": "^1.1.0",
     "tsup": "^8.5.1",
     "tsx": "4.22.4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   }
 }

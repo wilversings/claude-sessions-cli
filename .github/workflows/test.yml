@@ -1,0 +1,30 @@
+name: Test
+
+on:
+  # Pull requests cover branch work. Limiting push to the default branch keeps a
+  # branch with an open PR from running the whole suite twice on the same commit,
+  # while still checking main after a merge.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both ends of the supported range, so the engines floor is real.
+        node-version: [22, 24]
+    name: test (node ${{ matrix.node-version }})
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # The integration tests drive the built CLI in a real pty.
+      - run: npm test

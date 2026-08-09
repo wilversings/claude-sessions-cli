@@ -1,7 +1,7 @@
 <div align="center">
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![npm](https://img.shields.io/npm/v/%40wilversings%2Fclaude-sessions-cli?style=flat-square&color=CB3837)](https://www.npmjs.com/package/@wilversings/claude-sessions-cli)
 [![MIT](https://img.shields.io/badge/licence-MIT-22C55E?style=flat-square)](LICENSE)
 
@@ -52,6 +52,19 @@ cd claude-sessions-cli
 npm install
 npm run dev
 ```
+
+## Tests
+
+```sh
+npm test
+```
+
+The suite is end-to-end: it builds the CLI and drives `dist/index.js` in a real
+pseudo-terminal, sending actual keystrokes and asserting on the screen a user
+would see. Each test gets a throwaway `HOME` containing its own
+`~/.claude.json`, session transcripts, and tool state, plus a stub `claude` on
+`PATH` that records how it was invoked — so tests exercise the real code paths
+without ever touching your own sessions.
 
 ## Credit
 

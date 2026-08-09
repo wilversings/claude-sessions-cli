@@ -6,7 +6,12 @@ on:
       - "v*"
 
 jobs:
+  # A tag must not publish unless the integration tests pass on it.
+  test:
+    uses: ./.github/workflows/test.yml
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
