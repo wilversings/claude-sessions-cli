@@ -10,9 +10,12 @@ All notable changes to this project are documented here.
 
 - **Integration test suite** — the tool is now covered end to end by tests that drive the built CLI exactly as a user does: a real pseudo-terminal, real keystrokes, and a VT emulator interpreting the output, asserted against the rendered screen and the files written to disk. Every session lives in a throwaway `HOME` with a stub `claude` on `PATH`, so tests never touch a real install. Run them with `npm test`; they run on every push and again on the release tag before anything is published.
 
+- **Node 22 is now supported** — the minimum supported version drops from 24 to 22. Nothing in the tool or its dependency tree needed anything newer (`ink` itself declares `>=22`), and CI now runs the full integration suite on both 22 and 24 so the floor is actually exercised rather than assumed.
+
 ### Fixes
 
 - Fixed `--mock` being rejected as an unknown option. The flag was implemented but missing from the known-flag list, so the demo mode it enables could never actually be reached.
+- Updated the transitive `ws` dependency from 8.20.0 to 8.21.3, clearing two advisories (uninitialized memory disclosure, and a memory-exhaustion denial of service). The fixed versions were already inside the range `ink` asks for, so only the lockfile needed refreshing.
 
 ---
 

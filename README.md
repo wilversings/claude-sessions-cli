@@ -1,7 +1,7 @@
 <div align="center">
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![npm](https://img.shields.io/npm/v/%40wilversings%2Fclaude-sessions-cli?style=flat-square&color=CB3837)](https://www.npmjs.com/package/@wilversings/claude-sessions-cli)
 [![MIT](https://img.shields.io/badge/licence-MIT-22C55E?style=flat-square)](LICENSE)
 
