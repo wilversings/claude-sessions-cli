@@ -53,12 +53,10 @@ describe("code tab", () => {
     const cli = await box.launchReady()
     expect(cli.screen()).not.toContain("fix the checkout bug")
 
-    await cli.press("space")
-    await cli.waitFor("fix the checkout bug")
+    await cli.pressUntil("space", "fix the checkout bug")
     expect(cli.screen()).toContain("add a coupon field")
 
-    await cli.press("space")
-    await cli.waitForGone("fix the checkout bug")
+    await cli.pressUntilGone("space", "fix the checkout bug")
     await cli.quit()
   })
 
@@ -67,8 +65,7 @@ describe("code tab", () => {
     seed(box)
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("Checkout · fix the checkout bug")
+    await cli.pressUntil("space", "Checkout · fix the checkout bug")
     await cli.quit()
   })
 
@@ -77,13 +74,11 @@ describe("code tab", () => {
     seed(box)
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("fix the checkout bug")
+    await cli.pressUntil("space", "fix the checkout bug")
 
     // Move past the two now-visible sessions onto the infra header.
-    await cli.press("down", 3)
-    await cli.press("space")
-    await cli.waitFor("tighten the firewall rules")
+    await cli.selectRow("infra")
+    await cli.pressUntil("space", "tighten the firewall rules")
     expect(cli.screen()).not.toContain("fix the checkout bug")
     await cli.quit()
   })
@@ -100,10 +95,8 @@ describe("code tab", () => {
         .find((l) => l.trimStart().startsWith("›")) ?? ""
 
     expect(selected()).toContain("web-shop")
-    await cli.press("down")
-    await cli.waitFor(/›.*infra/)
-    await cli.press("up")
-    await cli.waitFor(/›.*web-shop/)
+    await cli.pressUntil("down", /›.*infra/)
+    await cli.pressUntil("up", /›.*web-shop/)
     await cli.quit()
   })
 
@@ -112,14 +105,12 @@ describe("code tab", () => {
     seed(box)
 
     const cli = await box.launchReady()
-    await cli.write("n")
     // Only web-shop has a titled session, so infra drops out entirely.
-    await cli.waitForGone("infra")
+    await cli.writeUntilTrue("n", () => !cli.screen().includes("infra"), "infra to drop out")
     expect(cli.screen()).toContain("named")
     expect(cli.screen()).toContain("web-shop")
 
-    await cli.write("n")
-    await cli.waitFor("infra")
+    await cli.writeUntil("n", "infra")
     await cli.quit()
   })
 })
@@ -133,19 +124,15 @@ describe("tabs", () => {
     const cli = await box.launchReady()
     expect(cli.screen()).toContain("web-shop")
 
-    await cli.press("right")
-    await cli.waitFor("+ New chat")
+    await cli.pressUntil("right", "+ New chat")
     expect(cli.screen()).toContain("Trip planning")
 
-    await cli.press("right")
-    await cli.waitFor("no scheduled tasks yet")
+    await cli.pressUntil("right", "no scheduled tasks yet")
 
     // Wraps back around to the code tab.
-    await cli.press("right")
-    await cli.waitFor("web-shop")
+    await cli.pressUntil("right", "web-shop")
 
-    await cli.press("left")
-    await cli.waitFor("no scheduled tasks yet")
+    await cli.pressUntil("left", "no scheduled tasks yet")
     await cli.quit()
   })
 
@@ -154,8 +141,7 @@ describe("tabs", () => {
     box.addChat("Trip planning")
 
     const cli = await box.launchReady()
-    await cli.press("tab")
-    await cli.waitFor("+ New chat")
+    await cli.pressUntil("tab", "+ New chat")
     await cli.quit()
   })
 })
@@ -166,13 +152,12 @@ describe("search", () => {
     seed(box)
 
     const cli = await box.launchReady()
-    await cli.write("/")
+    await cli.writeUntilTrue("/", () => !cli.screen().includes("search…"), "the search box to open")
     await cli.type("checkout")
     await cli.waitForGone("infra")
     expect(cli.screen()).toContain("web-shop")
 
-    await cli.press("escape")
-    await cli.waitFor("infra")
+    await cli.pressUntil("escape", "infra")
     await cli.quit()
   })
 
@@ -181,7 +166,7 @@ describe("search", () => {
     seed(box)
 
     const cli = await box.launchReady()
-    await cli.write("/")
+    await cli.writeUntilTrue("/", () => !cli.screen().includes("search…"), "the search box to open")
     await cli.type("infra")
     await cli.waitForGone("web-shop")
     expect(cli.screen()).toContain("infra")
@@ -194,10 +179,9 @@ describe("search", () => {
     box.addChat("Tax return")
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Trip planning")
+    await cli.pressUntil("right", "Trip planning")
 
-    await cli.write("/")
+    await cli.writeUntilTrue("/", () => !cli.screen().includes("search…"), "the search box to open")
     await cli.type("tax")
     await cli.waitForGone("Trip planning")
     expect(cli.screen()).toContain("Tax return")
@@ -209,16 +193,14 @@ describe("empty states", () => {
   test("shows the scheduled placeholder", async () => {
     box = createSandbox()
     const cli = await box.launchReady()
-    await cli.press("left")
-    await cli.waitFor("no scheduled tasks yet")
+    await cli.pressUntil("left", "no scheduled tasks yet")
     await cli.quit()
   })
 
   test("offers a new chat when there are no sessions at all", async () => {
     box = createSandbox()
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("+ New chat")
+    await cli.pressUntil("right", "+ New chat")
     await cli.quit()
   })
 })

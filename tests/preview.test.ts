@@ -15,8 +15,7 @@ describe("CLAUDE.md preview", () => {
     box.addChat("Bare")
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Documented")
+    await cli.pressUntil("right", "Documented")
 
     const row = cli.screen().split("\n").find((l) => l.includes("Documented")) ?? ""
     expect(row).toContain("md")
@@ -30,24 +29,23 @@ describe("CLAUDE.md preview", () => {
     box.addChat("Documented", { claudeMd: longDoc })
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Documented")
-    await cli.press("down")
+    await cli.pressUntil("right", "Documented")
+    await cli.selectRow("Documented")
 
-    await cli.write("m")
-    await cli.waitFor("CLAUDE.md")
+    await cli.writeUntil("m", "CLAUDE.md")
     expect(cli.screen()).toContain("line-01")
     // The viewport is shorter than the document, so the tail is off-screen.
     expect(cli.screen()).not.toContain("line-40")
 
-    await cli.press("down", 3)
-    await cli.waitFor("line-23")
+    // Each step is verified, so a dropped keypress fails loudly here rather
+    // than showing up as an off-by-one further down.
+    await cli.pressUntil("down", "line-21")
+    expect(cli.screen()).not.toContain("line-01")
 
-    await cli.press("up", 3)
-    await cli.waitFor("line-01")
+    await cli.pressUntil("up", "line-01")
+    expect(cli.screen()).not.toContain("line-21")
 
-    await cli.press("escape")
-    await cli.waitFor("Documented")
+    await cli.pressUntil("escape", "Documented")
     expect(cli.screen()).not.toContain("line-01")
     await cli.quit()
   })
@@ -57,13 +55,14 @@ describe("CLAUDE.md preview", () => {
     box.addChat("Bare")
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Bare")
-    await cli.press("down")
+    await cli.pressUntil("right", "Bare")
+    await cli.selectRow("Bare")
 
     await cli.write("m")
-    // Still on the list rather than in a preview.
-    await cli.waitFor("Bare")
+    // Nothing should happen, so give the preview a chance to appear before
+    // concluding that it did not.
+    await new Promise((r) => setTimeout(r, 1000))
+    expect(cli.screen()).toContain("Bare")
     expect(cli.screen()).not.toContain("CLAUDE.md")
     await cli.quit()
   })

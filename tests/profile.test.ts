@@ -46,12 +46,9 @@ describe("profiles", () => {
     const [id] = box.addProject(proj, [{ prompt: "work session" }])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("work session")
-    await cli.press("down")
-    await cli.write("s")
-
-    await cli.waitFor("★")
+    await cli.pressUntil("space", "work session")
+    await cli.selectRow("work session")
+    await cli.writeUntil("s", "★")
     expect(box.stateDir).toBe(join(box.home, ".claude-sessions-work"))
     expect(box.pins()).toContain(id!)
     // The default profile's state folder is never created.
@@ -68,8 +65,7 @@ describe("profiles", () => {
     await cli.waitFor("work-app")
     expect(cli.screen()).not.toContain("personal-app")
 
-    await cli.press("space")
-    await cli.waitFor("work session")
+    await cli.pressUntil("space", "work session")
     expect(cli.screen()).not.toContain("personal session")
     await cli.quit()
   })

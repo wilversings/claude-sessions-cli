@@ -19,11 +19,9 @@ const seed = (b: Sandbox, spec: { extra?: unknown[] } = {}) => {
 
 /** Opens the move wizard on the project's only session. */
 const openWizard = async (cli: Cli) => {
-  await cli.press("space")
-  await cli.waitFor("move me")
-  await cli.press("down")
-  await cli.write("M")
-  await cli.waitFor("choose destination")
+  await cli.pressUntil("space", "move me")
+  await cli.selectRow("move me")
+  await cli.writeUntil("M", "choose destination")
 }
 
 const cwdsIn = (file: string) =>
@@ -42,14 +40,11 @@ describe("moving a session", () => {
     await openWizard(cli)
 
     // Rows are: ../ then project-a, project-b, then the two "+" entries.
-    await cli.press("down", 2)
-    await cli.press("enter")
-
-    await cli.waitFor("Move")
+    await cli.selectRow("project-b/")
+    await cli.pressUntil("enter", "rewrites cwd")
     expect(cli.screen()).toContain("project-b")
-    await cli.write("y")
 
-    await cli.waitFor("moved")
+    await cli.writeUntil("y", "moved")
     await waitUntil(
       () => existsSync(box.transcriptPath(to, id)),
       (there) => there,
@@ -71,19 +66,17 @@ describe("moving a session", () => {
     await openWizard(cli)
 
     // The "+ New subfolder here…" row sits after ../ and the two folders.
-    await cli.press("down", 3)
-    await cli.press("enter")
-    await cli.waitFor("New subfolder")
+    await cli.selectRow("New subfolder here")
+    await cli.pressUntil("enter", "kebab-case")
 
     await cli.type("Payments Service")
-    await cli.press("enter")
+    await cli.pressUntil("enter", "rewrites cwd")
 
     // The typed name is slugified into a kebab-case folder.
     const expected = join(box.home, "code", "payments-service")
-    await cli.waitFor("payments-service")
-    await cli.write("y")
+    expect(cli.screen()).toContain("payments-service")
 
-    await cli.waitFor("moved")
+    await cli.writeUntil("y", "moved")
     await waitUntil(
       () => existsSync(box.transcriptPath(expected, id)),
       (there) => there,
@@ -101,17 +94,13 @@ describe("moving a session", () => {
     const cli = await box.launchReady()
     await openWizard(cli)
 
-    await cli.press("down", 4)
-    await cli.press("enter")
-    await cli.waitFor("Destination path")
+    await cli.selectRow("Other path")
+    await cli.pressUntil("enter", "Destination path")
 
     await cli.type(target)
-    await cli.press("enter")
+    await cli.pressUntil("enter", "rewrites cwd")
 
-    await cli.waitFor("Move")
-    await cli.write("y")
-
-    await cli.waitFor("moved")
+    await cli.writeUntil("y", "moved")
     await waitUntil(
       () => existsSync(box.transcriptPath(target, id)),
       (there) => there,
@@ -129,12 +118,10 @@ describe("moving a session", () => {
     expect(cli.screen()).toContain("project-b")
 
     // Step onto project-a and descend into it; it has no subfolders.
-    await cli.press("down")
-    await cli.press("right")
-    await cli.waitForGone("project-b")
+    await cli.selectRow("project-a/")
+    await cli.pressUntilGone("right", "project-b")
 
-    await cli.press("left")
-    await cli.waitFor("project-b")
+    await cli.pressUntil("left", "project-b")
     await cli.quit()
   })
 
@@ -153,10 +140,8 @@ describe("moving a session", () => {
 
     const cli = await box.launchReady()
     await openWizard(cli)
-    await cli.press("down", 2)
-    await cli.press("enter")
-
-    await cli.waitFor("embedded path reference")
+    await cli.selectRow("project-b/")
+    await cli.pressUntil("enter", "embedded path reference")
     expect(cli.screen()).toContain(to.split("/").pop()!)
     await cli.quit()
   })
@@ -167,12 +152,10 @@ describe("moving a session", () => {
 
     const cli = await box.launchReady()
     await openWizard(cli)
-    await cli.press("down", 2)
-    await cli.press("enter")
-    await cli.waitFor("Move")
+    await cli.selectRow("project-b/")
+    await cli.pressUntil("enter", "rewrites cwd")
 
-    await cli.write("n")
-    await cli.waitFor("choose destination")
+    await cli.writeUntil("n", "choose destination")
     expect(existsSync(box.transcriptPath(from, id))).toBe(true)
     await cli.quit()
   })
@@ -183,10 +166,9 @@ describe("moving a session", () => {
 
     const cli = await box.launchReady()
     await openWizard(cli)
-    await cli.press("escape")
 
     // The wizard lists project-a too, so wait for the wizard itself to go.
-    await cli.waitForGone("choose destination")
+    await cli.pressUntilGone("escape", "choose destination")
     expect(cli.screen()).toContain("project-a")
     await cli.quit()
   })

@@ -29,12 +29,9 @@ describe("export", () => {
     const [id] = box.addProject(proj, [{ prompt: "export me", title: "Exportable" }])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("export me")
-    await cli.press("down")
-    await cli.write("e")
-
-    await cli.waitFor("exported 1 session")
+    await cli.pressUntil("space", "export me")
+    await cli.selectRow("export me")
+    await cli.writeUntil("e", "exported 1 session")
     const manifest = readManifest(await oneArchive(box))
     expect(manifest.tool).toBe("claude-sessions-cli")
     expect(manifest.sessions).toHaveLength(1)
@@ -49,9 +46,7 @@ describe("export", () => {
 
     const cli = await box.launchReady()
     await cli.waitFor("app (2)")
-    await cli.write("e")
-
-    await cli.waitFor("exported 2 sessions")
+    await cli.writeUntil("e", "exported 2 sessions")
     expect(readManifest(await oneArchive(box)).sessions).toHaveLength(2)
     await cli.quit()
   })
@@ -64,9 +59,7 @@ describe("export", () => {
     box.addProject(b, [{ prompt: "three" }])
 
     const cli = await box.launchReady()
-    await cli.write("E")
-
-    await cli.waitFor("exported 3 sessions")
+    await cli.writeUntil("E", "exported 3 sessions")
     const manifest = readManifest(await oneArchive(box))
     expect(manifest.sessions.map((s) => s.cwd).sort()).toEqual([a, a, b].sort())
     await cli.quit()
@@ -77,9 +70,7 @@ describe("export", () => {
     box.addChat("Just a chat")
 
     const cli = await box.launchReady()
-    await cli.write("E")
-
-    await cli.waitFor("nothing to export")
+    await cli.writeUntil("E", "nothing to export")
     expect(box.archives()).toHaveLength(0)
     await cli.quit()
   })
@@ -90,11 +81,9 @@ describe("export", () => {
     box.addProject(proj, [{ prompt: "export me" }])
 
     const cli = await box.launchReady()
-    await cli.write("E")
-    await cli.waitFor("exported 1 session")
+    await cli.writeUntil("E", "exported 1 session")
 
-    await cli.press("enter")
-    await cli.waitFor("app")
+    await cli.pressUntil("enter", "app")
     await cli.quit()
   })
 })
@@ -106,8 +95,7 @@ describe("import", () => {
     const [id] = box.addProject(proj, [{ prompt: "round trip" }])
 
     const exporter = await box.launchReady()
-    await exporter.write("E")
-    await exporter.waitFor("exported 1 session")
+    await exporter.writeUntil("E", "exported 1 session")
     await exporter.quit()
 
     // Wipe every trace of the session, then bring it back from the archive.
@@ -115,12 +103,9 @@ describe("import", () => {
     box.writeClaudeJson({ projects: {} })
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
+    await cli.writeUntil("i", "Import sessions")
     // The newest archive in the working directory is prefilled.
-    await cli.press("enter")
-
-    await cli.waitFor("import complete")
+    await cli.pressUntil("enter", "import complete")
     expect(cli.screen()).toContain("1 added")
     expect(existsSync(box.transcriptPath(proj, id!))).toBe(true)
     expect(box.registeredProjects()).toContain(proj)
@@ -133,19 +118,13 @@ describe("import", () => {
     box.addProject(proj, [{ prompt: "already here" }])
 
     const exporter = await box.launchReady()
-    await exporter.write("E")
-    await exporter.waitFor("exported 1 session")
+    await exporter.writeUntil("E", "exported 1 session")
     await exporter.quit()
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
-    await cli.press("enter")
-
-    await cli.waitFor("Conflict (1/1)")
-    await cli.write("o")
-
-    await cli.waitFor("import complete")
+    await cli.writeUntil("i", "Import sessions")
+    await cli.pressUntil("enter", "Conflict (1/1)")
+    await cli.writeUntil("o", "import complete")
     expect(cli.screen()).toContain("1 overwritten")
     await cli.quit()
   })
@@ -156,19 +135,13 @@ describe("import", () => {
     box.addProject(proj, [{ prompt: "already here" }])
 
     const exporter = await box.launchReady()
-    await exporter.write("E")
-    await exporter.waitFor("exported 1 session")
+    await exporter.writeUntil("E", "exported 1 session")
     await exporter.quit()
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
-    await cli.press("enter")
-
-    await cli.waitFor("Conflict")
-    await cli.write("n")
-
-    await cli.waitFor("import complete")
+    await cli.writeUntil("i", "Import sessions")
+    await cli.pressUntil("enter", "Conflict")
+    await cli.writeUntil("n", "import complete")
     expect(cli.screen()).toContain("1 kept")
     await cli.quit()
   })
@@ -179,19 +152,13 @@ describe("import", () => {
     box.addProject(proj, [{ prompt: "first" }, { prompt: "second" }])
 
     const exporter = await box.launchReady()
-    await exporter.write("E")
-    await exporter.waitFor("exported 2 sessions")
+    await exporter.writeUntil("E", "exported 2 sessions")
     await exporter.quit()
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
-    await cli.press("enter")
-
-    await cli.waitFor("Conflict (1/2)")
-    await cli.write("a")
-
-    await cli.waitFor("import complete")
+    await cli.writeUntil("i", "Import sessions")
+    await cli.pressUntil("enter", "Conflict (1/2)")
+    await cli.writeUntil("a", "import complete")
     expect(cli.screen()).toContain("2 overwritten")
     await cli.quit()
   })
@@ -202,19 +169,13 @@ describe("import", () => {
     box.addProject(proj, [{ prompt: "first" }, { prompt: "second" }])
 
     const exporter = await box.launchReady()
-    await exporter.write("E")
-    await exporter.waitFor("exported 2 sessions")
+    await exporter.writeUntil("E", "exported 2 sessions")
     await exporter.quit()
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
-    await cli.press("enter")
-
-    await cli.waitFor("Conflict (1/2)")
-    await cli.write("x")
-
-    await cli.waitFor("import complete")
+    await cli.writeUntil("i", "Import sessions")
+    await cli.pressUntil("enter", "Conflict (1/2)")
+    await cli.writeUntil("x", "import complete")
     expect(cli.screen()).toContain("2 kept")
     await cli.quit()
   })
@@ -223,12 +184,9 @@ describe("import", () => {
     box = createSandbox()
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
+    await cli.writeUntil("i", "Import sessions")
     await cli.type("/definitely/not/here.tar.gz")
-    await cli.press("enter")
-
-    await cli.waitFor("import failed")
+    await cli.pressUntil("enter", "import failed")
     expect(cli.screen()).toContain("Archive not found")
     await cli.quit()
   })
@@ -243,11 +201,8 @@ describe("import", () => {
     execFileSync("tar", ["-czf", join(box.home, "claude-sessions-junk.tar.gz"), "-C", source, "."])
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
-    await cli.press("enter")
-
-    await cli.waitFor("import failed")
+    await cli.writeUntil("i", "Import sessions")
+    await cli.pressUntil("enter", "import failed")
     expect(cli.screen()).toMatch(/manifest|importable/)
     await cli.quit()
   })
@@ -258,10 +213,8 @@ describe("import", () => {
     box.addProject(proj, [{ prompt: "untouched" }])
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
-    await cli.press("escape")
-
+    await cli.writeUntil("i", "Import sessions")
+    await cli.pressUntilGone("escape", "Import sessions")
     await cli.waitFor("app")
     await cli.quit()
   })
@@ -275,17 +228,14 @@ describe("round trip", () => {
     const original = readFileSync(box.transcriptPath(proj, id!), "utf8")
 
     const exporter = await box.launchReady()
-    await exporter.write("E")
-    await exporter.waitFor("exported 1 session")
+    await exporter.writeUntil("E", "exported 1 session")
     await exporter.quit()
 
     rmSync(box.historyDir(proj), { recursive: true, force: true })
 
     const cli = await box.launchReady()
-    await cli.write("i")
-    await cli.waitFor("Import sessions")
-    await cli.press("enter")
-    await cli.waitFor("import complete")
+    await cli.writeUntil("i", "Import sessions")
+    await cli.pressUntil("enter", "import complete")
 
     await waitUntil(
       () => existsSync(box.transcriptPath(proj, id!)),

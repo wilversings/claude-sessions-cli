@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach } from "vitest"
 import { join } from "path"
+import { utimesSync } from "fs"
 import { createSandbox, type Sandbox } from "./helpers/sandbox"
 import { waitUntil, type Cli } from "./helpers/terminal"
 
@@ -12,9 +13,11 @@ const rowIndex = (cli: Cli, text: string) =>
     .split("\n")
     .findIndex((l) => l.includes(text))
 
-/** Empties a prefilled text input so a fresh value can be typed. */
+/** Empties a prefilled text input so a fresh value can be typed. Presses a few
+ *  more times than there are characters: extra backspaces on an empty field do
+ *  nothing, so this self-corrects if one is dropped. */
 const clearInput = async (cli: Cli, length: number) => {
-  await cli.press("backspace", length)
+  await cli.press("backspace", length + 4)
 }
 
 describe("starring code sessions", () => {
@@ -27,15 +30,12 @@ describe("starring code sessions", () => {
     ])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("older work")
+    await cli.pressUntil("space", "older work")
     expect(rowIndex(cli, "newer work")).toBeLessThan(rowIndex(cli, "older work"))
 
-    await cli.press("down", 2)
-    await cli.write("s")
-
+    await cli.selectRow("older work")
     // Starred code sessions are keyed by session id, not by path.
-    await waitUntil(() => box.pins(), (p) => p.includes(older!), "the star to persist")
+    await cli.writeUntilTrue("s", () => box.pins().includes(older!), "the star to persist")
     await cli.waitFor("★")
     await waitUntil(
       () => rowIndex(cli, "older work") < rowIndex(cli, "newer work"),
@@ -51,15 +51,11 @@ describe("starring code sessions", () => {
     const [only] = box.addProject(proj, [{ prompt: "some work" }])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("some work")
-    await cli.press("down")
+    await cli.pressUntil("space", "some work")
+    await cli.selectRow("some work")
 
-    await cli.write("s")
-    await waitUntil(() => box.pins(), (p) => p.includes(only!), "the star to persist")
-
-    await cli.write("s")
-    await waitUntil(() => box.pins(), (p) => !p.includes(only!), "the star to be removed")
+    await cli.writeUntilTrue("s", () => box.pins().includes(only!), "the star to persist")
+    await cli.writeUntilTrue("s", () => !box.pins().includes(only!), "the star to be removed")
     await cli.quit()
   })
 })
@@ -67,34 +63,25 @@ describe("starring code sessions", () => {
 describe("pinning and tagging chats", () => {
   test("p pins a chat and floats it above the rest", async () => {
     box = createSandbox()
-    const dirs = {
-      "Zebra chat": box.addChat("Zebra chat"),
-      "Apple chat": box.addChat("Apple chat"),
-    }
+    const zebra = box.addChat("Zebra chat")
+    const apple = box.addChat("Apple chat")
+    // Chats sort newest first; make that explicit rather than relying on the
+    // order the fixtures happened to be written in.
+    const now = Date.now() / 1000
+    utimesSync(apple, now - 600, now - 600)
+    utimesSync(zebra, now - 60, now - 60)
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Apple chat")
+    await cli.pressUntil("right", "Apple chat")
+    expect(rowIndex(cli, "Zebra chat")).toBeLessThan(rowIndex(cli, "Apple chat"))
 
-    // Row 0 is "+ New chat"; step onto whichever chat sorts first today.
-    await cli.press("down")
-    const labels = Object.keys(dirs) as (keyof typeof dirs)[]
-    const label = (await waitUntil(
-      () => {
-        const row = cli.screen().split("\n").find((l) => l.includes("›")) ?? ""
-        return labels.find((l) => row.includes(l))
-      },
-      (found) => Boolean(found),
-      "the cursor to land on a chat",
-    ))!
-
-    await cli.write("p")
-    await waitUntil(() => box.pins(), (p) => p.length === 1, "the pin to persist")
-    expect(box.pins()).toEqual([dirs[label]])
+    await cli.selectRow("Apple chat")
+    await cli.writeUntilTrue("p", () => box.pins().length === 1, "the pin to persist")
+    expect(box.pins()).toEqual([apple])
 
     // Pinned chats are listed above the unpinned ones.
     await waitUntil(
-      () => rowIndex(cli, label) < rowIndex(cli, label === "Apple chat" ? "Zebra chat" : "Apple chat"),
+      () => rowIndex(cli, "Apple chat") < rowIndex(cli, "Zebra chat"),
       (above) => above,
       "the pinned chat to float to the top",
     )
@@ -106,22 +93,17 @@ describe("pinning and tagging chats", () => {
     const dir = box.addChat("Budget review")
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Budget review")
-    await cli.press("down")
+    await cli.pressUntil("right", "Budget review")
+    await cli.selectRow("Budget review")
 
-    await cli.write("t")
-    await cli.waitFor("Tag")
+    await cli.writeUntil("t", "Tag")
     await cli.type("finance")
-    await cli.press("enter")
-
-    await waitUntil(() => box.tags(), (t) => t[dir] === "finance", "the tag to persist")
+    await cli.pressUntilTrue("enter", () => box.tags()[dir] === "finance", "the tag to persist")
     // The chat is now tucked inside a collapsed #finance folder.
     await cli.waitForGone("Budget review")
     await cli.waitFor("finance")
 
-    await cli.press("space")
-    await cli.waitFor("Budget review")
+    await cli.pressUntil("space", "Budget review")
     await cli.quit()
   })
 
@@ -130,20 +112,15 @@ describe("pinning and tagging chats", () => {
     const dir = box.addChat("Budget review", { tag: "finance" })
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("finance")
+    await cli.pressUntil("right", "finance")
     // Expand the folder, then step onto the chat inside it.
-    await cli.press("down")
-    await cli.press("space")
-    await cli.waitFor("Budget review")
-    await cli.press("down")
+    await cli.selectRow("finance")
+    await cli.pressUntil("space", "Budget review")
+    await cli.selectRow("Budget review")
 
-    await cli.write("t")
-    await cli.waitFor("Tag")
+    await cli.writeUntil("t", "Tag")
     await clearInput(cli, "finance".length)
-    await cli.press("enter")
-
-    await waitUntil(() => box.tags(), (t) => !t[dir], "the tag to be removed")
+    await cli.pressUntilTrue("enter", () => !box.tags()[dir], "the tag to be removed")
     await cli.quit()
   })
 })
@@ -155,19 +132,15 @@ describe("renaming", () => {
     const [id] = box.addProject(proj, [{ prompt: "old name" }])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("old name")
-    await cli.press("down")
+    await cli.pressUntil("space", "old name")
+    await cli.selectRow("old name")
 
-    await cli.write("r")
-    await cli.waitFor("Rename")
+    await cli.writeUntil("r", "Rename")
     await clearInput(cli, "old name".length)
     await cli.type("Payment retries")
-    await cli.press("enter")
-
-    await waitUntil(
-      () => box.labels(),
-      (l) => l[id!] === "Payment retries",
+    await cli.pressUntilTrue(
+      "enter",
+      () => box.labels()[id!] === "Payment retries",
       "the rename to persist",
     )
     await cli.waitFor("Payment retries")
@@ -179,19 +152,15 @@ describe("renaming", () => {
     const dir = box.addChat("Old chat")
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Old chat")
-    await cli.press("down")
+    await cli.pressUntil("right", "Old chat")
+    await cli.selectRow("Old chat")
 
-    await cli.write("r")
-    await cli.waitFor("Rename")
+    await cli.writeUntil("r", "Rename")
     await clearInput(cli, "Old chat".length)
     await cli.type("New chat name")
-    await cli.press("enter")
-
-    await waitUntil(
-      () => box.labels(),
-      (l) => l[dir] === "New chat name",
+    await cli.pressUntilTrue(
+      "enter",
+      () => box.labels()[dir] === "New chat name",
       "the rename to persist",
     )
     await cli.quit()
@@ -203,15 +172,12 @@ describe("renaming", () => {
     const [id] = box.addProject(proj, [{ prompt: "keep me" }])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("keep me")
-    await cli.press("down")
+    await cli.pressUntil("space", "keep me")
+    await cli.selectRow("keep me")
 
-    await cli.write("r")
-    await cli.waitFor("Rename")
+    await cli.writeUntil("r", "Rename")
     await cli.type("throwaway")
-    await cli.press("escape")
-
+    await cli.pressUntilGone("escape", "Rename")
     await cli.waitFor("keep me")
     expect(box.labels()[id!]).toBeUndefined()
     await cli.quit()

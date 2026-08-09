@@ -2,7 +2,15 @@ import { describe, test, expect, afterEach } from "vitest"
 import { join } from "path"
 import { existsSync, mkdirSync, writeFileSync, rmSync } from "fs"
 import { createSandbox, type Sandbox } from "./helpers/sandbox"
-import { waitUntil } from "./helpers/terminal"
+import { waitUntil, type Cli } from "./helpers/terminal"
+
+/** Waits for the cleaner to settle. It paints one frame with every group
+ *  unchecked before the effect that ticks them all runs, so acting on the
+ *  first frame that says "Clean up" would confirm an empty selection. */
+const cleanerReady = async (cli: Cli) => {
+  await cli.waitFor("Clean up")
+  await cli.waitFor("[x]")
+}
 
 let box: Sandbox
 afterEach(() => box?.cleanup())
@@ -37,7 +45,7 @@ describe("the clean subcommand", () => {
     seedMess(box)
 
     const cli = box.launch({ args: ["clean"] })
-    await cli.waitFor("Clean up")
+    await cleanerReady(cli)
 
     const screen = cli.screen()
     expect(screen).toContain("ghost (directory deleted)")
@@ -51,8 +59,8 @@ describe("the clean subcommand", () => {
     const { ghost, empty, orphan, healthy } = seedMess(box)
 
     const cli = box.launch({ args: ["clean"] })
-    await cli.waitFor("Clean up")
-    await cli.write("y")
+    await cleanerReady(cli)
+    await cli.writeUntilTrue("y", () => cli.hasExited, "the cleaner to finish")
 
     expect(await cli.waitForExit()).toBe(0)
 
@@ -69,8 +77,8 @@ describe("the clean subcommand", () => {
     const { ghost, orphan } = seedMess(box)
 
     const cli = box.launch({ args: ["clean"] })
-    await cli.waitFor("Clean up")
-    await cli.write("n")
+    await cleanerReady(cli)
+    await cli.writeUntilTrue("n", () => cli.hasExited, "the cleaner to cancel")
 
     expect(await cli.waitForExit()).toBe(0)
     expect(box.registeredProjects()).toContain(ghost)
@@ -82,10 +90,10 @@ describe("the clean subcommand", () => {
     const { ghost, empty } = seedMess(box)
 
     const cli = box.launch({ args: ["clean"] })
-    await cli.waitFor("Clean up")
+    await cleanerReady(cli)
     // The cursor starts on the first group; unticking it spares those entries.
-    await cli.press("space")
-    await cli.write("y")
+    await cli.pressUntil("space", "[ ]")
+    await cli.writeUntilTrue("y", () => cli.hasExited, "the cleaner to finish")
 
     expect(await cli.waitForExit()).toBe(0)
     const registered = box.registeredProjects()
@@ -99,10 +107,10 @@ describe("the clean subcommand", () => {
     const { ghost, empty } = seedMess(box)
 
     const cli = box.launch({ args: ["clean"] })
-    await cli.waitFor("Clean up")
+    await cleanerReady(cli)
     // Everything starts selected, so `a` clears the lot.
-    await cli.write("a")
-    await cli.write("y")
+    await cli.writeUntil("a", "[ ]")
+    await cli.writeUntilTrue("y", () => cli.hasExited, "the cleaner to finish")
 
     expect(await cli.waitForExit()).toBe(0)
     expect(box.registeredProjects()).toContain(ghost)
@@ -115,7 +123,7 @@ describe("the clean subcommand", () => {
 
     const cli = box.launch({ args: ["clean"] })
     await cli.waitFor("nothing to clean")
-    await cli.press("escape")
+    await cli.pressUntilTrue("escape", () => cli.hasExited, "the cleaner to close")
     expect(await cli.waitForExit()).toBe(0)
   })
 })
@@ -126,13 +134,10 @@ describe("cleaning from inside the TUI", () => {
     const { ghost, healthy } = seedMess(box)
 
     const cli = await box.launchReady()
-    await cli.write("C")
-    await cli.waitFor("Clean up")
-    await cli.write("y")
-
-    await waitUntil(
-      () => box.registeredProjects(),
-      (p) => !p.includes(ghost),
+    await cli.writeUntil("C", "Clean up")
+    await cli.writeUntilTrue(
+      "y",
+      () => !box.registeredProjects().includes(ghost),
       "the ghost project to be removed",
     )
     // Back on the list, with the healthy project still there.
@@ -146,10 +151,8 @@ describe("cleaning from inside the TUI", () => {
     const { ghost } = seedMess(box)
 
     const cli = await box.launchReady()
-    await cli.write("C")
-    await cli.waitFor("Clean up")
-    await cli.press("escape")
-
+    await cli.writeUntil("C", "Clean up")
+    await cli.pressUntilGone("escape", "Clean up")
     await cli.waitFor("healthy")
     expect(box.registeredProjects()).toContain(ghost)
     await cli.quit()

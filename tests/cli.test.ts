@@ -58,7 +58,7 @@ describe("command line", () => {
     expect(await byQ.waitForExit()).toBe(0)
 
     const byEsc = await box.launchReady()
-    await byEsc.press("escape")
+    await byEsc.pressUntilTrue("escape", () => byEsc.hasExited, "escape to quit")
     expect(await byEsc.waitForExit()).toBe(0)
   })
 

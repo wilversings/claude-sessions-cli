@@ -17,18 +17,15 @@ describe("deleting a single session", () => {
     ])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("delete this one")
-    await cli.press("down", 2)
+    await cli.pressUntil("space", "delete this one")
+    await cli.selectRow("delete this one")
 
-    await cli.write("d")
-    await cli.waitFor("Remove")
+    await cli.writeUntil("d", "Remove")
     expect(cli.screen()).toContain("delete this one")
 
-    await cli.write("y")
-    await waitUntil(
-      () => existsSync(box.transcriptPath(proj, drop!)),
-      (there) => !there,
+    await cli.writeUntilTrue(
+      "y",
+      () => !existsSync(box.transcriptPath(proj, drop!)),
       "the transcript to be deleted",
     )
     await cli.waitForGone("delete this one")
@@ -44,14 +41,11 @@ describe("deleting a single session", () => {
     const [id] = box.addProject(proj, [{ prompt: "spare me" }])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("spare me")
-    await cli.press("down")
+    await cli.pressUntil("space", "spare me")
+    await cli.selectRow("spare me")
 
-    await cli.write("d")
-    await cli.waitFor("Remove")
-    await cli.write("n")
-
+    await cli.writeUntil("d", "Remove")
+    await cli.writeUntilTrue("n", () => !cli.screen().includes("Remove"), "the prompt to close")
     await cli.waitFor("spare me")
     expect(existsSync(box.transcriptPath(proj, id!))).toBe(true)
     await cli.quit()
@@ -63,14 +57,11 @@ describe("deleting a single session", () => {
     const [id] = box.addProject(proj, [{ prompt: "spare me" }])
 
     const cli = await box.launchReady()
-    await cli.press("space")
-    await cli.waitFor("spare me")
-    await cli.press("down")
+    await cli.pressUntil("space", "spare me")
+    await cli.selectRow("spare me")
 
-    await cli.write("d")
-    await cli.waitFor("Remove")
-    await cli.press("escape")
-
+    await cli.writeUntil("d", "Remove")
+    await cli.pressUntilGone("escape", "Remove")
     await cli.waitFor("spare me")
     expect(existsSync(box.transcriptPath(proj, id!))).toBe(true)
     await cli.quit()
@@ -81,15 +72,11 @@ describe("deleting a single session", () => {
     const dir = box.addChat("Disposable chat")
 
     const cli = await box.launchReady()
-    await cli.press("right")
-    await cli.waitFor("Disposable chat")
-    await cli.press("down")
+    await cli.pressUntil("right", "Disposable chat")
+    await cli.selectRow("Disposable chat")
 
-    await cli.write("d")
-    await cli.waitFor("Remove")
-    await cli.write("y")
-
-    await waitUntil(() => existsSync(dir), (there) => !there, "the chat folder to be removed")
+    await cli.writeUntil("d", "Remove")
+    await cli.writeUntilTrue("y", () => !existsSync(dir), "the chat folder to be removed")
     await waitUntil(() => box.labels(), (l) => !l[dir], "the label to be forgotten")
     await cli.quit()
   })
@@ -106,14 +93,12 @@ describe("deleting a whole project", () => {
     const cli = await box.launchReady()
     await cli.waitFor("doomed (2)")
 
-    await cli.write("d")
-    await cli.waitFor("Delete all")
+    await cli.writeUntil("d", "Delete all")
     expect(cli.screen()).toContain("doomed")
 
-    await cli.write("y")
-    await waitUntil(
-      () => box.registeredProjects(),
-      (p) => !p.includes(doomed),
+    await cli.writeUntilTrue(
+      "y",
+      () => !box.registeredProjects().includes(doomed),
       "the project to be unregistered",
     )
     await cli.waitForGone("doomed")
@@ -133,11 +118,8 @@ describe("deleting a whole project", () => {
     const cli = await box.launchReady()
     await cli.waitFor("app (2)")
 
-    await cli.write("d")
-    await cli.waitFor("Delete all")
-    await cli.write("n")
-
-    await cli.waitFor("app (2)")
+    await cli.writeUntil("d", "Delete all")
+    await cli.writeUntil("n", "app (2)")
     expect(box.registeredProjects()).toContain(proj)
     await cli.quit()
   })

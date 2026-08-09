@@ -150,6 +150,122 @@ export class Cli {
     }
   }
 
+  /** Presses a key until the screen shows `expected`, retrying a dropped one.
+   *
+   *  Each attempt gets a generous window to repaint before we conclude the
+   *  keystroke was swallowed, so a toggle is never pressed a second time merely
+   *  because the render was slow under load. */
+  async pressUntil(key: Key, expected: string | RegExp, attempts = 4, window = 2500) {
+    await this.retryPress(key, expected, false, attempts, window)
+  }
+
+  /** Presses a key until `expected` is gone from the screen. */
+  async pressUntilGone(key: Key, expected: string | RegExp, attempts = 4, window = 2500) {
+    await this.retryPress(key, expected, true, attempts, window)
+  }
+
+  private async retryPress(
+    key: Key,
+    expected: string | RegExp,
+    gone: boolean,
+    attempts: number,
+    window: number,
+  ) {
+    const satisfied = () => matches(this.screen(), expected) !== gone
+    for (let i = 0; i < attempts; i++) {
+      if (satisfied()) return
+      await this.press(key)
+      try {
+        await (gone ? this.waitForGone(expected, window) : this.waitFor(expected, window))
+        return
+      } catch {
+        // Treat it as a dropped keystroke and press again.
+      }
+    }
+    throw new Error(
+      `Screen never ${gone ? "stopped showing" : "showed"} ${describePattern(expected)} ` +
+        `after ${attempts} presses of ${key}.\n--- screen ---\n${this.screen()}\n--- end screen ---`,
+    )
+  }
+
+  /** Sends a character until the screen shows `expected`, retrying a dropped
+   *  keystroke. The screen equivalent of pressUntil for letter keys. */
+  async writeUntil(data: string, expected: string | RegExp, attempts = 4, window = 2500) {
+    for (let i = 0; i < attempts; i++) {
+      if (matches(this.screen(), expected)) return
+      await this.write(data)
+      try {
+        await this.waitFor(expected, window)
+        return
+      } catch {
+        // Treat it as a dropped keystroke and send it again.
+      }
+    }
+    throw new Error(
+      `Screen never showed ${describePattern(expected)} after ${attempts} presses of ` +
+        `${JSON.stringify(data)}.\n--- screen ---\n${this.screen()}\n--- end screen ---`,
+    )
+  }
+
+  /** Presses a key until `check` holds — for keys whose effect lands on disk
+   *  rather than on screen, such as handing off to Claude Code. */
+  async pressUntilTrue(
+    key: Key,
+    check: () => boolean,
+    what: string,
+    attempts = 4,
+    window = 4000,
+  ) {
+    await this.writeUntilTrue(KEYS[key], check, what, attempts, window)
+  }
+
+  /** Sends a character until `check` holds — for keys whose effect lands on
+   *  disk rather than on screen. */
+  async writeUntilTrue(
+    data: string,
+    check: () => boolean,
+    what: string,
+    attempts = 4,
+    window = 3000,
+  ) {
+    for (let i = 0; i < attempts; i++) {
+      if (check()) return
+      await this.write(data)
+      const deadline = Date.now() + window
+      while (Date.now() < deadline) {
+        if (check()) return
+        await sleep(20)
+      }
+    }
+    throw new Error(
+      `Never observed ${what} after ${attempts} presses of ${JSON.stringify(data)}.\n` +
+        `--- screen ---\n${this.screen()}\n--- end screen ---`,
+    )
+  }
+
+  /** The row the selection marker is currently on, as rendered. */
+  cursorRow(): string {
+    return this.screen().split("\n").find((l) => l.trimStart().startsWith("›")) ?? ""
+  }
+
+  /** Walks the selection down onto the row containing `label`.
+   *
+   *  Counting keystrokes ("press down twice") is a bet that every one of them
+   *  lands, and under load they do not — a dropped keypress silently acts on
+   *  the wrong row. This checks the screen after each step and presses again if
+   *  the cursor has not moved, the way a person would. */
+  async selectRow(label: string, maxSteps = 15) {
+    for (let step = 0; step <= maxSteps; step++) {
+      if (this.cursorRow().includes(label)) return
+      await this.press("down")
+      await sleep(60)
+    }
+    throw new Error(
+      `Cursor never reached a row containing ${JSON.stringify(label)}.\n` +
+        `--- screen ---\n${this.screen()}\n--- end screen ---`,
+    )
+  }
+
   resize(cols: number, rows: number) {
     this.proc.resize(cols, rows)
     this.term.resize(cols, rows)
@@ -201,7 +317,9 @@ export class Cli {
   async quit(): Promise<number> {
     for (let i = 0; i < 3 && !this.exited; i++) {
       this.send(KEYS.escape)
-      await sleep(100)
+      // Escape may already have quit the list; wait for that before sending
+      // anything else, so we do not write into a closed pty.
+      for (let j = 0; j < 8 && !this.exited; j++) await sleep(20)
     }
     if (!this.exited) this.send("q")
     return this.waitForExit()
