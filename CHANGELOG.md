@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 ---
 
+## Unreleased — 2026-08-09
+
+### Highlights
+
+- **Integration test suite** — the tool is now covered end to end by tests that drive the built CLI exactly as a user does: a real pseudo-terminal, real keystrokes, and a VT emulator interpreting the output, asserted against the rendered screen and the files written to disk. Every session lives in a throwaway `HOME` with a stub `claude` on `PATH`, so tests never touch a real install. Run them with `npm test`; they run on every push and again on the release tag before anything is published.
+
+### Fixes
+
+- Fixed `--mock` being rejected as an unknown option. The flag was implemented but missing from the known-flag list, so the demo mode it enables could never actually be reached.
+
+---
+
 ## Unreleased — 2026-08-07
 
 ### Highlights

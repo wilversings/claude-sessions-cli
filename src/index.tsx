@@ -22,7 +22,7 @@ import { randomUUID } from "crypto"
 const HOME = homedir()
 const DEFAULT_CONFIG_DIR = join(HOME, ".claude")
 
-const KNOWN_FLAGS = new Set(["--no-banner"])
+const KNOWN_FLAGS = new Set(["--no-banner", "--mock"])
 
 const unknownFlag = process.argv
   .slice(2)

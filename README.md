@@ -53,6 +53,19 @@ npm install
 npm run dev
 ```
 
+## Tests
+
+```sh
+npm test
+```
+
+The suite is end-to-end: it builds the CLI and drives `dist/index.js` in a real
+pseudo-terminal, sending actual keystrokes and asserting on the screen a user
+would see. Each test gets a throwaway `HOME` containing its own
+`~/.claude.json`, session transcripts, and tool state, plus a stub `claude` on
+`PATH` that records how it was invoked — so tests exercise the real code paths
+without ever touching your own sessions.
+
 ## Credit
 
 This is a fork of [kud/claude-sessions-cli](https://github.com/kud/claude-sessions-cli) by Erwann Mest, licensed under MIT. See [LICENSE](LICENSE) for the full license text.
