@@ -13,6 +13,7 @@ import {
   readdirSync,
   utimesSync,
   chmodSync,
+  realpathSync,
 } from "fs"
 import { join, basename } from "path"
 import { tmpdir } from "os"
@@ -89,7 +90,10 @@ export class Sandbox {
   private readonly clis: Cli[] = []
 
   constructor(opts: { profile?: string } = {}) {
-    this.root = mkdtempSync(join(tmpdir(), "claude-sessions-test-"))
+    // Resolved up front: macOS's tmpdir lives under a symlink (/var ->
+    // /private/var), and a spawned child's cwd reports the resolved path, so
+    // comparing against the unresolved one would fail there.
+    this.root = realpathSync(mkdtempSync(join(tmpdir(), "claude-sessions-test-")))
     this.home = join(this.root, "home")
     this.binDir = join(this.root, "bin")
     this.claudeLog = join(this.root, "claude-calls.jsonl")

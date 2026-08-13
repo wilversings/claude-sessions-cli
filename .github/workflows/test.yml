@@ -11,13 +11,14 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         # Both ends of the supported range, so the engines floor is real.
         node-version: [22, 24]
-    name: test (node ${{ matrix.node-version }})
+        os: [ubuntu-latest, macos-latest]
+    name: test (node ${{ matrix.node-version }}, ${{ matrix.os }})
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -25,6 +26,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
+      # node-pty's darwin prebuilds ship spawn-helper without the execute bit
+      # (microsoft/node-pty#850), so every pty spawn fails on macOS otherwise.
+      - if: runner.os == 'macOS'
+        run: chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper
       - run: npm run typecheck
       # The integration tests drive the built CLI in a real pty.
       - run: npm test
