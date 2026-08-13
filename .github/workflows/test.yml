@@ -26,6 +26,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
+      # node-pty's darwin prebuilds ship spawn-helper without the execute bit
+      # (microsoft/node-pty#850), so every pty spawn fails on macOS otherwise.
+      - if: runner.os == 'macOS'
+        run: chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper
       - run: npm run typecheck
       # The integration tests drive the built CLI in a real pty.
       - run: npm test
