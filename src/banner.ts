@@ -129,10 +129,14 @@ export const runBanner = async (ready?: Promise<unknown>) => {
 
   for (const frame of intro) await play(frame)
 
-  // Loop the pulse only for as long as there is something to wait for. Finishing
-  // the cycle it is in keeps the hand-off to the outro on the beat.
-  while (!loaded && Date.now() - started < BANNER_BUDGET_MS)
-    for (const frame of pulse) await play(frame)
+  // Loop the pulse only for as long as there is something to wait for, checking
+  // after every frame — not just every full cycle — so a load that finishes
+  // mid-cycle cuts straight to the outro instead of riding out the rest of it.
+  let pulseFrame = 0
+  while (!loaded && Date.now() - started < BANNER_BUDGET_MS) {
+    await play(pulse[pulseFrame % pulse.length])
+    pulseFrame++
+  }
 
   for (const frame of outro) await play(frame)
 
